@@ -531,9 +531,10 @@ void drawSleepScreen() {
 // SLEEP IMAGE LOADING
 // ============================================================================
 
-// Load a 1-bit monochrome BMP (800x480) from SD card into the framebuffer.
-// Supports standard bottom-up and top-down row order.
-// Checks color table to auto-detect whether bits need inversion.
+// Load a BMP from SD card into the framebuffer.
+// Supports 1-bit and 8-bit BMPs in landscape (800x480) or portrait (480x800).
+// 8-bit images are dithered to 1-bit using Floyd-Steinberg error diffusion.
+// Portrait images are rotated to the physical (landscape) framebuffer layout.
 static bool loadSleepBMP() {
   if (!SDCard.ready() || !SDCard.exists("/sleep.bmp")) return false;
 
@@ -544,7 +545,6 @@ static bool loadSleepBMP() {
   uint8_t bmpHdr[18];
   if (file.read(bmpHdr, 18) != 18) { file.close(); return false; }
 
-  // Validate BMP signature
   if (bmpHdr[0] != 'B' || bmpHdr[1] != 'M') {
     if (Serial) Serial.println("[SLP] Not a BMP file");
     file.close(); return false;
@@ -552,16 +552,15 @@ static bool loadSleepBMP() {
 
   uint32_t dataOffset = bmpHdr[10] | (bmpHdr[11] << 8) | (bmpHdr[12] << 16) | (bmpHdr[13] << 24);
 
-  // Validate DIB header size (at offset 14): must be 40 (BITMAPINFOHEADER)
   uint32_t dibSize = bmpHdr[14] | (bmpHdr[15] << 8) | (bmpHdr[16] << 16) | (bmpHdr[17] << 24);
   if (dibSize != 40) {
     if (Serial) Serial.printf("[SLP] Unsupported DIB header size: %d (expected 40)\n", (int)dibSize);
     file.close(); return false;
   }
 
-  // Read remaining DIB header (40-4=36 bytes already consumed) + color table (8 bytes) = 44 bytes
-  uint8_t hdr[44];
-  if (file.read(hdr, 44) != 44) { file.close(); return false; }
+  // Read remaining 36 bytes of DIB header
+  uint8_t hdr[36];
+  if (file.read(hdr, 36) != 36) { file.close(); return false; }
 
   int32_t  width  = hdr[0] | (hdr[1] << 8) | (hdr[2] << 16) | (hdr[3] << 24);
   int32_t  height = hdr[4] | (hdr[5] << 8) | (hdr[6] << 16) | (hdr[7] << 24);
@@ -570,34 +569,158 @@ static bool loadSleepBMP() {
   bool topDown = (height < 0);
   if (topDown) height = -height;
 
-  if (width != 800 || height != 480 || bpp != 1) {
-    if (Serial) Serial.printf("[SLP] BMP must be 800x480 1-bit (got %dx%d %d-bit)\n",
+  const bool isLandscape = (width == 800 && height == 480);
+  const bool isPortrait  = (width == 480 && height == 800);
+
+  if ((!isLandscape && !isPortrait) || (bpp != 1 && bpp != 8 && bpp != 24)) {
+    if (Serial) Serial.printf("[SLP] BMP must be 800x480 or 480x800, 1/8/24-bit (got %dx%d %d-bit)\n",
                                (int)width, (int)height, bpp);
     file.close(); return false;
   }
 
-  // Check color table (starts at offset 36 within our hdr buffer): if entry 0 is white, invert
-  bool invert = (hdr[36] >= 0x80);
-
-  file.seekSet(dataOffset);
-
   uint8_t* fb = halDisplay.getFrameBuffer();
-  const int rowBytes = 100;  // 800 / 8, already 4-byte aligned
 
-  for (int row = 0; row < 480; row++) {
-    int destRow = topDown ? row : (479 - row);
-    if (file.read(fb + destRow * rowBytes, rowBytes) != rowBytes) {
-      if (Serial) Serial.printf("[SLP] BMP read error at row %d\n", row);
+  if (bpp == 1) {
+    // --- 1-bit BMP ---
+    // Read 2-entry color table (8 bytes) to detect inversion
+    uint8_t colorTable[8];
+    if (file.read(colorTable, 8) != 8) { file.close(); return false; }
+    bool invert = (colorTable[0] >= 0x80);
+
+    file.seekSet(dataOffset);
+    const int rowBytes = width / 8;
+
+    if (isLandscape) {
+      // Direct copy to framebuffer (original fast path)
+      for (int row = 0; row < 480; row++) {
+        int destRow = topDown ? row : (479 - row);
+        if (file.read(fb + destRow * 100, rowBytes) != rowBytes) {
+          if (Serial) Serial.printf("[SLP] BMP read error at row %d\n", row);
+          file.close(); return false;
+        }
+      }
+    } else {
+      // Portrait 1-bit: read row by row and rotate to physical layout
+      // Portrait (imgCol, imgRow) → physical (phyX=imgRow, phyY=479-imgCol)
+      uint8_t rowBuf[60];  // 480 / 8
+      for (int fileRow = 0; fileRow < 800; fileRow++) {
+        if (file.read(rowBuf, rowBytes) != rowBytes) {
+          if (Serial) Serial.printf("[SLP] BMP read error at row %d\n", fileRow);
+          file.close(); return false;
+        }
+        const int imgRow = topDown ? fileRow : (799 - fileRow);
+        for (int imgCol = 0; imgCol < 480; imgCol++) {
+          const bool bit = (rowBuf[imgCol / 8] >> (7 - (imgCol % 8))) & 1;
+          const int phyX = imgRow;
+          const int phyY = 479 - imgCol;
+          const int destByte = phyY * 100 + phyX / 8;
+          const int destBit  = 7 - (phyX % 8);
+          if (bit) fb[destByte] |=  (1 << destBit);
+          else     fb[destByte] &= ~(1 << destBit);
+        }
+      }
+    }
+
+    if (invert) {
+      for (uint32_t i = 0; i < HalDisplay::BUFFER_SIZE; i++) fb[i] = ~fb[i];
+    }
+
+  } else {
+    // --- 8-bit or 24-bit BMP with Floyd-Steinberg dithering ---
+    uint8_t grayLUT[256] = {};
+
+    if (bpp == 8) {
+      // Read 256-entry color table and build grayscale LUT
+      uint8_t colorTable[1024];
+      if (file.read(colorTable, 1024) != 1024) {
+        if (Serial) Serial.println("[SLP] Failed to read 8-bit color table");
+        file.close(); return false;
+      }
+      for (int i = 0; i < 256; i++) {
+        grayLUT[i] = (colorTable[i * 4 + 2] * 77 +    // R
+                       colorTable[i * 4 + 1] * 150 +   // G
+                       colorTable[i * 4 + 0] * 29) >> 8; // B
+      }
+    }
+
+    file.seekSet(dataOffset);
+    const int imgWidth  = width;
+    const int imgHeight = height;
+    const int rowStride = ((imgWidth * (bpp / 8)) + 3) & ~3;  // 4-byte aligned
+
+    // Error diffusion buffers (+2 for boundary padding on each side)
+    int16_t* errCur  = (int16_t*)calloc(imgWidth + 2, sizeof(int16_t));
+    int16_t* errNext = (int16_t*)calloc(imgWidth + 2, sizeof(int16_t));
+    uint8_t* rowBuf  = (uint8_t*)malloc(rowStride);
+
+    if (!errCur || !errNext || !rowBuf) {
+      free(errCur); free(errNext); free(rowBuf);
+      if (Serial) Serial.println("[SLP] Out of memory for dithering");
       file.close(); return false;
     }
-  }
 
-  if (invert) {
-    for (uint32_t i = 0; i < HalDisplay::BUFFER_SIZE; i++) fb[i] = ~fb[i];
+    for (int fileRow = 0; fileRow < imgHeight; fileRow++) {
+      if ((int)file.read(rowBuf, rowStride) != rowStride) {
+        if (Serial) Serial.printf("[SLP] BMP read error at row %d\n", fileRow);
+        free(errCur); free(errNext); free(rowBuf);
+        file.close(); return false;
+      }
+
+      const int imgRow = topDown ? fileRow : (imgHeight - 1 - fileRow);
+      memset(errNext, 0, (imgWidth + 2) * sizeof(int16_t));
+
+      for (int col = 0; col < imgWidth; col++) {
+        uint8_t pixelGray;
+        if (bpp == 8) {
+          pixelGray = grayLUT[rowBuf[col]];
+        } else {
+          const int off = col * 3;
+          pixelGray = (rowBuf[off + 2] * 77 + rowBuf[off + 1] * 150 + rowBuf[off] * 29) >> 8;
+        }
+
+        int16_t gray = pixelGray + errCur[col + 1];
+        if (gray < 0) gray = 0;
+        if (gray > 255) gray = 255;
+
+        const bool isWhite = (gray >= 128);
+        const int16_t err = gray - (isWhite ? 255 : 0);
+
+        // Map image coordinates to physical framebuffer
+        int phyX, phyY;
+        if (isLandscape) {
+          phyX = col;
+          phyY = imgRow;
+        } else {
+          phyX = imgRow;
+          phyY = 479 - col;
+        }
+
+        const int destByte = phyY * 100 + phyX / 8;
+        const int destBit  = 7 - (phyX % 8);
+        if (isWhite) fb[destByte] |=  (1 << destBit);
+        else         fb[destByte] &= ~(1 << destBit);
+
+        // Floyd-Steinberg error distribution
+        errCur[col + 2]  += (err * 7) >> 4;  // right
+        errNext[col]     += (err * 3) >> 4;  // below-left
+        errNext[col + 1] += (err * 5) >> 4;  // below
+        errNext[col + 2] += (err * 1) >> 4;  // below-right
+      }
+
+      // Swap error buffers
+      int16_t* tmp = errCur;
+      errCur = errNext;
+      errNext = tmp;
+    }
+
+    free(errCur);
+    free(errNext);
+    free(rowBuf);
   }
 
   file.close();
-  if (Serial) Serial.println("[SLP] Loaded sleep.bmp");
+  if (Serial) Serial.printf("[SLP] Loaded sleep.bmp (%dx%d %d-bit%s)\n",
+                             (int)width, (int)height, bpp, isPortrait ? " portrait" : "");
   return true;
 }
 

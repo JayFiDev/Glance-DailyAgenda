@@ -3,7 +3,7 @@
 
 Custom firmware for the [Xteink X4](https://www.xteink.com/) e-ink reader. Syncs calendar events and reminders from an companion app via BLE and displays them on the e-ink screen.
 
-Big thanks to the [CrossPoint project](https://github.com/crosspoint-reader/crosspoint-reader) for there work!
+Big thanks to the [CrossPoint project](https://github.com/crosspoint-reader/crosspoint-reader) for their work!
 
 This project is **not affiliated with Xteink**; it's built as a community project.
 

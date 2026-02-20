@@ -7,6 +7,9 @@ Big thanks to the [CrossPoint project](https://github.com/crosspoint-reader/cros
 
 This project is **not affiliated with Xteink**; it's built as a community project.
 
+| Calendar View | Reminders View |
+|---------------|-----------|
+| ![Calendar view](https://github.com/user-attachments/assets/67736ed6-e708-418d-b0f6-5149d63190b6) | ![ToDo View](https://github.com/user-attachments/assets/b19bfa5b-26c2-4d13-9ace-1c1f80ccdacf) |
 ## Features
 
 - **Three display pages** — Today's Events, Upcoming (3 days), Reminders

@@ -1,16 +1,22 @@
 # Glance
 ### Daily Agenda for X4
 
-Custom firmware for the [Xteink X4](https://www.xteink.com/) e-ink reader. Syncs calendar events and reminders from an iPhone companion app via BLE and displays them on the e-ink screen.
+Custom firmware for the [Xteink X4](https://www.xteink.com/) e-ink reader. Syncs calendar events and reminders from an companion app via BLE and displays them on the e-ink screen.
 
 Big thanks to the [CrossPoint project](https://github.com/crosspoint-reader/crosspoint-reader) for there work!
 
 This project is **not affiliated with Xteink**; it's built as a community project.
 
+## Companion app example
+There is an open source example app you can build yourself using Xcode 
+[Companion App](https://github.com/JayFiDev/Glance-Companion/)
+
+
+## Features
+
 | Calendar View | Reminders View |
 |---------------|-----------|
 | ![Calendar view](https://github.com/user-attachments/assets/67736ed6-e708-418d-b0f6-5149d63190b6) | ![ToDo View](https://github.com/user-attachments/assets/b19bfa5b-26c2-4d13-9ace-1c1f80ccdacf) |
-## Features
 
 - **Three display pages** — Today's Events, Upcoming (3 days), Reminders
 - **BLE sync** — Sync calenar and reminder data

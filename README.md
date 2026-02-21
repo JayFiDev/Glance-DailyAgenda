@@ -34,7 +34,7 @@ There is an open source example app you can build yourself using Xcode
 ### Clone & Build
 
 ```bash
-git clone --recurse-submodules https://github.com/<your-username>/glance-daily-agenda.git
+git clone --recurse-submodules https://github.com/JayFiDev/glance-daily-agenda.git
 cd glance-daily-agenda
 ```
 

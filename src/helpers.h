@@ -11,3 +11,7 @@ void getLocalDate(const char* iso, char* out);
 void addDays(const char* date, int days, char* out);
 int dateCompare(const char* a, const char* b);
 bool isCompleteJSON(const char* data, size_t len);
+
+// Converts an ISO8601 UTC string ("YYYY-MM-DDTHH:MM:SSZ") to a Unix timestamp.
+// Returns 0 on parse error.
+uint64_t isoToUnixTime(const char* iso);

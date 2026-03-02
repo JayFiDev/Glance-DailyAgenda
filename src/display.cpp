@@ -48,6 +48,22 @@ void initFonts() {
 }
 
 // ============================================================================
+// SLEEP PAGE FLAG
+// ============================================================================
+
+// When true, page draw functions use the sleep content bottom (no footer/button area)
+// and the caller draws a sleep footer instead.
+static bool gIsSleepPage = false;
+
+// Content bottom edge: where the last content row may end.
+// Sleep pages use a double-height footer (2 × BUTTON_HINTS_HEIGHT) to fit both lines.
+static inline int contentBottom() {
+  return gIsSleepPage
+    ? renderer.getScreenHeight() - BUTTON_HINTS_HEIGHT * 2
+    : renderer.getScreenHeight() - BUTTON_HINTS_HEIGHT - FOOTER_INFO_HEIGHT;
+}
+
+// ============================================================================
 // FORMAT HELPERS
 // ============================================================================
 
@@ -186,7 +202,7 @@ static void drawScrollIndicators(bool canScrollUp, bool canScrollDown) {
   const int trackX = screenW - 8;
   const int trackW = 4;
   const int trackTop = HEADER_HEIGHT + 4;
-  const int trackBottom = renderer.getScreenHeight() - BUTTON_HINTS_HEIGHT - FOOTER_INFO_HEIGHT - 4;
+  const int trackBottom = contentBottom() - 4;
   const int trackH = trackBottom - trackTop;
 
   // Draw track (thin outline)
@@ -366,7 +382,7 @@ static int drawReminderItem(int x, int y, int w, const Reminder& rem, bool selec
 static void drawTodayPage() {
   const int screenW = renderer.getScreenWidth();
   const int contentW = screenW - 2 * CONTENT_SIDE_PADDING;
-  const int bottom = renderer.getScreenHeight() - BUTTON_HINTS_HEIGHT - FOOTER_INFO_HEIGHT;
+  const int bottom = contentBottom();
 
   char dateBuf[24];
   formatDateLong(todayDate, dateBuf, sizeof(dateBuf));
@@ -405,7 +421,7 @@ static void drawTodayPage() {
 static void drawUpcomingPage() {
   const int screenW = renderer.getScreenWidth();
   const int contentW = screenW - 2 * CONTENT_SIDE_PADDING;
-  const int bottom = renderer.getScreenHeight() - BUTTON_HINTS_HEIGHT - FOOTER_INFO_HEIGHT;
+  const int bottom = contentBottom();
 
   drawPageTitle("Next three days", "");
 
@@ -444,7 +460,7 @@ static void drawUpcomingPage() {
 static void drawRemindersPage() {
   const int screenW = renderer.getScreenWidth();
   const int contentW = screenW - 2 * CONTENT_SIDE_PADDING;
-  const int bottom = renderer.getScreenHeight() - BUTTON_HINTS_HEIGHT - FOOTER_INFO_HEIGHT;
+  const int bottom = contentBottom();
 
   int y = HEADER_HEIGHT + 8;
   totalPageItems = reminderCount;
@@ -748,6 +764,64 @@ static bool loadSleepRaw() {
 // Try BMP first, then raw, then return false for text fallback.
 bool loadSleepImage() {
   return loadSleepBMP() || loadSleepRaw();
+}
+
+// ============================================================================
+// SLEEP PAGE FOOTER
+// ============================================================================
+
+static void drawSleepFooter() {
+  const int screenW    = renderer.getScreenWidth();
+  const int footerH    = BUTTON_HINTS_HEIGHT * 2;
+  const int footerY    = renderer.getScreenHeight() - footerH;
+  const int lineH      = renderer.getLineHeight(UI_10_FONT_ID);
+  const int smallH     = renderer.getLineHeight(SMALL_FONT_ID);
+
+  renderer.drawLine(0, footerY, screenW - 1, footerY);
+
+  if (wakeSchedule.enabled) {
+    // Two lines: "Sleeping..." and "(wake at HH:MM)"
+    char wakeBuf[24];
+    if (use24HourTime) {
+      snprintf(wakeBuf, sizeof(wakeBuf), "(wake at %d:%02d)", wakeSchedule.hour, wakeSchedule.minute);
+    } else {
+      int h12 = wakeSchedule.hour % 12;
+      if (h12 == 0) h12 = 12;
+      snprintf(wakeBuf, sizeof(wakeBuf), "(wake at %d:%02d %s)",
+               h12, wakeSchedule.minute, wakeSchedule.hour >= 12 ? "PM" : "AM");
+    }
+    const int totalH = lineH + 4 + smallH;
+    const int startY = footerY + (footerH - totalH) / 2;
+    renderer.drawCenteredText(UI_10_FONT_ID, startY, "Sleeping...", true, EpdFontFamily::BOLD);
+    renderer.drawCenteredText(SMALL_FONT_ID, startY + lineH + 4, wakeBuf);
+  } else {
+    // Single line: "Sleeping..."
+    const int textY = footerY + (footerH - lineH) / 2;
+    renderer.drawCenteredText(UI_10_FONT_ID, textY, "Sleeping...", true, EpdFontFamily::BOLD);
+  }
+}
+
+// Render the current data page with a sleep footer instead of button hints.
+// Called from enterDeepSleep() — bypasses the needsDisplayUpdate guard.
+void drawSleepPageScreen() {
+  renderer.clearScreen(0xFF);
+
+  gIsSleepPage = true;
+
+  drawHeader(MODE_TITLES[currentMode]);
+
+  switch (currentMode) {
+    case MODE_TODAY:     drawTodayPage();     break;
+    case MODE_UPCOMING:  drawUpcomingPage();  break;
+    case MODE_REMINDERS: drawRemindersPage(); break;
+    default:             drawTodayPage();     break;
+  }
+
+  drawSleepFooter();
+
+  gIsSleepPage = false;
+
+  renderer.displayBuffer(HalDisplay::HALF_REFRESH);
 }
 
 // ============================================================================

@@ -19,4 +19,5 @@ void initFonts();
 void updateDisplay();
 void drawBootScreen();
 void drawSleepScreen();
+void drawSleepPageScreen();   // render a data page with sleep footer (for deep sleep display)
 bool loadSleepImage();

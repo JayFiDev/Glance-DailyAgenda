@@ -55,8 +55,9 @@ static constexpr int MAX_COMPLETED_IDS = MAX_REMINDERS;
 static constexpr size_t BLE_BUFFER_SIZE = 24576;
 
 // Timing
-static constexpr unsigned long SLEEP_TIMEOUT_MS     = 10UL * 60 * 1000;
+static constexpr unsigned long SLEEP_TIMEOUT_MS     = 10UL * 60 * 1000;  // fallback constant
 static constexpr unsigned long BLE_TIMEOUT_MS       = 2UL * 60 * 1000;
+static constexpr unsigned long BLE_WAKE_DURATION_MS = 10UL * 60 * 1000;  // scheduled BLE window
 static constexpr unsigned long IDLE_THRESHOLD_MS    = 3000;
 static constexpr unsigned long IDLE_DELAY_MS        = 50;
 static constexpr unsigned long ACTIVE_DELAY_MS      = 10;
@@ -74,6 +75,23 @@ enum DisplayMode : uint8_t {
 };
 
 inline const char* const MODE_TITLES[] = {"Today", "Upcoming", "Reminders"};
+
+// ============================================================================
+// SLEEP & WAKE SETTINGS
+// ============================================================================
+
+enum SleepScreenMode : uint8_t {
+  SLEEP_WALLPAPER  = 0,
+  SLEEP_TODAY      = 1,
+  SLEEP_UPCOMING   = 2,
+  SLEEP_REMINDERS  = 3
+};
+
+struct WakeSchedule {
+  bool    enabled;
+  uint8_t hour;
+  uint8_t minute;
+};
 
 // ============================================================================
 // DATA STRUCTURES

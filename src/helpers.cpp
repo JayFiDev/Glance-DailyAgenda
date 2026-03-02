@@ -73,6 +73,36 @@ int dateCompare(const char* a, const char* b) {
   return strncmp(aLocal, bLocal, 10);
 }
 
+// Converts "YYYY-MM-DDTHH:MM:SS..." (UTC) to a Unix timestamp (seconds since 1970-01-01).
+uint64_t isoToUnixTime(const char* iso) {
+  int year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0;
+  if (sscanf(iso, "%d-%d-%dT%d:%d:%d", &year, &month, &day, &hour, &minute, &second) < 6) {
+    return 0;
+  }
+  if (year < 2020 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return 0;
+  }
+
+  // Cumulative days before each month (non-leap year)
+  static const uint16_t daysBeforeMonth[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
+
+  uint64_t days = 0;
+  for (int y = 1970; y < year; y++) {
+    days += ((y % 4 == 0) && (y % 100 != 0 || y % 400 == 0)) ? 366 : 365;
+  }
+  days += daysBeforeMonth[month - 1];
+  // Leap year correction: add a day if we're past February
+  if (month > 2 && year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) {
+    days += 1;
+  }
+  days += (uint64_t)(day - 1);
+
+  return days * 86400ULL
+       + (uint64_t)hour   * 3600ULL
+       + (uint64_t)minute * 60ULL
+       + (uint64_t)second;
+}
+
 bool isCompleteJSON(const char* data, size_t len) {
   if (len == 0) return false;
   int braces = 0;

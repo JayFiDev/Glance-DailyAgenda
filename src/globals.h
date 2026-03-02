@@ -60,6 +60,21 @@ extern bool hasData;
 extern int utcOffsetSeconds;
 extern bool use24HourTime;
 
+// Display & sleep settings (from displayConfig)
+extern int autoSleepMinutes;
+extern bool autoSleepEnabled;
+extern SleepScreenMode sleepScreenMode;
+extern WakeSchedule wakeSchedule;
+
+// RTC memory: time reference for wake schedule (survives deep sleep)
+extern uint64_t rtcRefUnixTime;       // UTC unix time at rtcRefMillis
+extern uint32_t rtcRefMillis;         // millis() when rtcRefUnixTime was recorded
+extern uint64_t rtcNextWakeUnixTime;  // UTC unix time of next scheduled timer wake
+extern bool     rtcWakeScheduleEnabled;
+extern uint8_t  rtcWakeHour;
+extern uint8_t  rtcWakeMinute;
+extern int32_t  rtcUtcOffsetSec;
+
 // Reminder selection
 extern int selectedReminderIdx;
 

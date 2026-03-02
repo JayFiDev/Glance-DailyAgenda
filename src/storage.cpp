@@ -38,8 +38,15 @@ void parseCalendarJSON(const char* json, size_t len) {
     // Parse display config
     if (doc["displayConfig"].is<JsonObject>()) {
       JsonObject config = doc["displayConfig"];
-      utcOffsetSeconds = config["utcOffsetSeconds"] | 0;
-      use24HourTime = config["use24HourTime"] | true;
+      utcOffsetSeconds    = config["utcOffsetSeconds"] | 0;
+      use24HourTime       = config["use24HourTime"] | true;
+      autoSleepEnabled    = config["autoSleepEnabled"] | true;
+      autoSleepMinutes    = config["autoSleepMinutes"] | 5;
+      int rawScreen       = config["sleepScreen"] | 0;
+      sleepScreenMode     = (SleepScreenMode)rawScreen;
+      wakeSchedule.enabled = config["wakeScheduleEnabled"] | false;
+      wakeSchedule.hour    = config["wakeScheduleHour"] | 7;
+      wakeSchedule.minute  = config["wakeScheduleMinute"] | 0;
     }
   } else {
     safeCopy(lastSyncTime, sizeof(lastSyncTime), doc["syncDate"] | "");

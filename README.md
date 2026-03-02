@@ -23,6 +23,7 @@ There is an open source example app you can build yourself using Xcode
 - **Reminder management** — Mark reminders complete/incomplete on-device with two-way sync
 - **Scrollable lists** — Dynamic row heights, list category subheaders, scrollbar indicator
 - **Deep sleep** — Auto-sleep after inactivity, wake via power button
+- **Auto sync** - Wake the device once a day to automatically receive new data
 
 
 ## Setup
